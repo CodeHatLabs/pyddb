@@ -30,8 +30,11 @@ class DynamoDBBoss(object):
             if type(name_or_class) == type('') \
             else name_or_class.TABLE_NAME
         if not table_name in self.tables:
-            self.tables[table_name] = self.dynamodb.Table('%s-%s' % (
-                                        self.table_name_prefix, table_name))
+            prefixed_name = \
+                    f'{self.table_name_prefix}-{table_name}' \
+                    if self.table_name_prefix \
+                    else table_name
+            self.tables[table_name] = self.dynamodb.Table(prefixed_name)
         return self.tables[table_name]
 
     def item_factory(self, item_class, dynamodb_item_dict):
