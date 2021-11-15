@@ -15,7 +15,7 @@ setup(
     zip_safe=False,
     install_requires=[
         'boto3',
-        'git+https://github.com/CodeHatLabs/pypool',
+        'pypool @ git+https://github.com/CodeHatLabs/pypool',
     ],
     test_suite='',
     include_package_data=True,
