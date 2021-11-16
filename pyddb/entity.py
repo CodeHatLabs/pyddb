@@ -1,7 +1,7 @@
 from uuid import uuid4
 
-from dynamodb_boss.helpers import EZQuery
-from dynamodb_boss.item import DynamoDBItem
+from .helpers import EZQuery
+from .item import DynamoDBItem
 
 
 entity_item_classes = {}
