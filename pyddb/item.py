@@ -1,5 +1,5 @@
 import json
-import logging
+import logging; logger = logging.getLogger(__name__)
 from time import time as now
 from uuid import uuid4
 
@@ -14,12 +14,14 @@ SAVE_FAIL = 'save fail'
 UPDATE_COLLISION = 'update collision'
 
 
-class DynamoDBItemException(Exception):
+class DynamoDBItemError(Exception):
     pass
 
 
 class DynamoDBItem(object):
 
+    INDICES = {}
+    ITEM_CLASS_NAME = 'item'
     PARTITION_KEY_NAME = ''
     SORT_KEY_NAME = ''
     TABLE_NAME = ''
@@ -31,19 +33,23 @@ class DynamoDBItem(object):
             # explicity test for None, as zero is a valid value
             if ttl_seconds is not None:
                 setattr(self, self.TTL_ATTR_NAME, int(now() + ttl_seconds))
+        self.item_class_name = self.ITEM_CLASS_NAME
         self.__dict__.update(**kwargs)
         # all non-dynamodb attributes should start with an underscore
         self._boss = boss
-        self._table = boss.get_table(self)
+        self._table = boss.get_table(self.TABLE_NAME)
 
     def delete(self):
         resp = self._table.delete_item(Key=self.key)
         if resp['ResponseMetadata']['HTTPStatusCode'] != 200:
-            log = logging.getLogger('DynamoDBItem.delete')
             dat = {'resp': resp, 'table': self.TABLE_NAME, 'key': self.key}
-            log.error('%s: %s' % (DELETE_FAIL, json.dumps(dat)))
-            raise DynamoDBItemException(DELETE_FAIL)
+            logger.error('%s: %s' % (DELETE_FAIL, json.dumps(dat)))
+            raise DynamoDBItemError(DELETE_FAIL)
         return resp
+
+    @classmethod
+    def get_index_name(self, partition_attr, sort_attr=None):
+        return self.INDICES.get((partition_attr, sort_attr))
 
     @property
     def item_dict(self):
@@ -55,7 +61,7 @@ class DynamoDBItem(object):
             if k[0] == '_':
                 del item_dict[k]
         # hook for child classes to remove any other desired attributes
-        self._prune_non_persistent_attributes(item_dict)
+        self.prune_non_persistent_attributes(item_dict)
         return item_dict
 
     @property
@@ -65,7 +71,7 @@ class DynamoDBItem(object):
             key[self.SORT_KEY_NAME] = getattr(self, self.SORT_KEY_NAME)
         return key
 
-    def _prune_non_persistent_attributes(self, item):
+    def prune_non_persistent_attributes(self, item_dict):
         """
         Override this method for child classes that store non-persistent
             or non-persistable attributes in the instance and need to
@@ -86,24 +92,20 @@ class DynamoDBItem(object):
         try:
             resp = self._table.put_item(**kwargs)
             if resp['ResponseMetadata']['HTTPStatusCode'] != 200:
-                log = logging.getLogger('DynamoDBItem.save')
                 dat = {'resp': resp, 'table': self.TABLE_NAME,
                                         'item': kwargs['Item']}
-                log.error('%s: %s' % (SAVE_FAIL, json.dumps(dat)))
-                raise DynamoDBItemException(SAVE_FAIL)
+                logger.error('%s: %s' % (SAVE_FAIL, json.dumps(dat)))
+                raise DynamoDBItemError(SAVE_FAIL)
             return resp
         except ClientError as ex:
             if ex.response['Error']['Code'] \
                                     == 'ConditionalCheckFailedException':
-                log = logging.getLogger('DynamoDBItem.save')
                 dat = {'table': self.TABLE_NAME, 'item': kwargs['Item']}
                 jdat = json.dumps(dat)
                 if old_revtag:
-                    log.warning('%s: %s' % (UPDATE_COLLISION, jdat))
-                    raise DynamoDBItemException(UPDATE_COLLISION)
+                    logger.warning('%s: %s' % (UPDATE_COLLISION, jdat))
+                    raise DynamoDBItemError(UPDATE_COLLISION)
                 else:
-                    log.error('%s: %s' % (INSERT_COLLISION, jdat))
-                    raise DynamoDBItemException(INSERT_COLLISION)
+                    logger.error('%s: %s' % (INSERT_COLLISION, jdat))
+                    raise DynamoDBItemError(INSERT_COLLISION)
             raise
-
-

@@ -21,6 +21,3 @@ def EZQuery(tbl, key_attr, key, index_name=None,
             break
         kwargs['ExclusiveStartKey'] = result['LastEvaluatedKey']
     return items
-        
-
-
